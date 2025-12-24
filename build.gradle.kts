@@ -6,7 +6,7 @@ plugins {
     id("org.allaymc.gradle.plugin") version "0.2.1"
 }
 
-group = "org.allaymc.templateworld"
+group = "org.allaymc"
 description = "TemplateWorld is a plugin to make it able to create a runtime-only world based on a 'template world'"
 version = "0.1.0"
 
@@ -38,7 +38,7 @@ allay {
     api = "0.19.0"
 
     plugin {
-        entrance = ".TemplateWorld"
+        entrance = "org.allaymc.templateworld.TemplateWorld"
         authors += "daoge_cmd"
         website = "https://github.com/AllayMC/TemplateWorld"
     }
