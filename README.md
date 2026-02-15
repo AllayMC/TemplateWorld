@@ -1,11 +1,12 @@
 # 🌍 TemplateWorld
 
-TemplateWorld is an [AllayMC](https://github.com/AllayMC/Allay) plugin that allows you to create runtime-only worlds based on template worlds. It is designed for mini-game servers where you need to create temporary game rooms that are automatically cleaned up after use. 🎮
+TemplateWorld is an [AllayMC](https://github.com/AllayMC/Allay) plugin that allows you to create worlds based on template worlds. It supports both **temporary** (runtime-only) and **persistent** worlds, making it ideal for mini-game servers, lobby systems, and any scenario where you need to create worlds from pre-defined templates. 🎮
 
 ## ✨ Features
 
-- 🗺️ Create temporary worlds from pre-defined templates
-- 💨 Runtime-only worlds that won't persist to disk
+- 🗺️ Create temporary or persistent worlds from pre-defined templates
+- 💨 Temporary worlds are runtime-only and won't persist to disk
+- 💾 Persistent worlds preserve modifications using copy-on-write storage
 - 📦 Support for different world storage formats (LEVELDB, etc.)
 - 🧹 Automatic cleanup of temporary world files on server restart
 - 🔌 Simple API for programmatic world creation
@@ -53,7 +54,9 @@ dependencies {
 }
 ```
 
-You can use the API to create temporary worlds programmatically:
+#### 💨 Temporary Worlds
+
+Temporary worlds are runtime-only — they get a random UUID as their name and are automatically cleaned up when unloaded or on server restart.
 
 ```java
 import org.allaymc.templateworld.TemplateWorld;
@@ -68,18 +71,38 @@ World tmpWorld = TemplateWorld.createTmpWorld(
     "LEVELDB",       // template format
     "LEVELDB"        // temporary world format
 );
+```
 
-// The world is automatically marked as runtime-only
-// and will be cleaned up when unloaded
+#### 💾 Persistent Worlds
+
+Persistent worlds are not runtime-only — their modifications are preserved across chunk unloads. Reads check the persistent storage first, then fall back to the template for unmodified chunks.
+
+```java
+import org.allaymc.templateworld.TemplateWorld;
+import org.allaymc.api.world.World;
+
+// Create a persistent world using default LEVELDB format
+World world = TemplateWorld.createPersistentWorld(
+    "bedwars_map1",  // template name
+    "my_game_room"   // persistent world name
+);
+
+// Create with custom formats
+World world = TemplateWorld.createPersistentWorld(
+    "bedwars_map1",  // template name
+    "LEVELDB",       // template format
+    "my_game_room",  // persistent world name
+    "LEVELDB"        // persistent world format
+);
 ```
 
 ### ⚙️ How It Works
 
 1. 📂 Template worlds are stored in the `templates/` directory
-2. 📖 When a temporary world is created, chunks are read from the template but written to a temporary location (`worlds/.tmp/`)
-3. 🔑 Each temporary world gets a unique UUID as its name
-4. ⏳ The world is marked as `runtimeOnly`, so it won't persist after unloading
-5. 🔄 On server restart, all temporary world files are automatically cleaned up
+2. 📖 When a world is created, chunks are read from the template but written to a separate storage location
+3. 💨 **Temporary worlds**: written to `worlds/.tmp/`, each gets a unique UUID as its name, and are marked as `runtimeOnly`
+4. 💾 **Persistent worlds**: written to `worlds/<worldName>/`, modifications are preserved via copy-on-write — unmodified chunks are read from the template, modified chunks are read from the persistent storage
+5. 🔄 On server restart, all temporary world files are automatically cleaned up, while persistent worlds retain their data
 
 ## 📄 License
 

@@ -8,7 +8,7 @@ plugins {
 
 group = "org.allaymc"
 description = "TemplateWorld is a plugin to make it able to create a runtime-only world based on a 'template world'"
-version = "0.1.0"
+version = "0.2.0"
 
 tasks {
     withType<JavaCompile> {
@@ -35,7 +35,7 @@ java {
 }
 
 allay {
-    api = "0.19.0"
+    api = "0.25.0"
 
     plugin {
         entrance = "org.allaymc.templateworld.TemplateWorld"

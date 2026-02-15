@@ -32,11 +32,21 @@ public class TemplateWorldStorage implements WorldStorage {
     protected static Map<String, WorldStorage> templates;
 
     protected WorldStorage templateStorage;
-    protected WorldStorage tmpWorldStorage;
+    protected WorldStorage targetStorage;
+    protected Path targetPath;
+    protected boolean persistent;
 
     public TemplateWorldStorage(String templateName, String templateFormat, String tmpWorldName, String tmpWorldFormat) {
         this.templateStorage = getTemplate(templateName, templateFormat);
-        this.tmpWorldStorage = createTmpWorldStorage(tmpWorldName, tmpWorldFormat);
+        this.targetPath = tmpWorldPath.resolve(tmpWorldName);
+        this.targetStorage = Registries.WORLD_STORAGE_FACTORIES.get(tmpWorldFormat).apply(targetPath);
+        this.persistent = false;
+    }
+
+    public TemplateWorldStorage(String templateName, String templateFormat, WorldStorage targetStorage, boolean persistent) {
+        this.templateStorage = getTemplate(templateName, templateFormat);
+        this.targetStorage = targetStorage;
+        this.persistent = persistent;
     }
 
     @SneakyThrows
@@ -54,18 +64,7 @@ public class TemplateWorldStorage implements WorldStorage {
     @SneakyThrows
     private static void resetTmpWorldPath() {
         log.info("Resetting tmp world path {}", tmpWorldPath);
-        if (Files.exists(tmpWorldPath)) {
-            try (var walk = Files.walk(tmpWorldPath)) {
-                walk.sorted(Comparator.reverseOrder())
-                        .forEach(p -> {
-                            try {
-                                Files.delete(p);
-                            } catch (IOException e) {
-                                throw new UncheckedIOException(e);
-                            }
-                        });
-            }
-        }
+        deletePath(tmpWorldPath);
         Files.createDirectories(tmpWorldPath);
         log.info("Reset tmp world path {}", tmpWorldPath);
     }
@@ -90,63 +89,92 @@ public class TemplateWorldStorage implements WorldStorage {
         return template;
     }
 
-    private static WorldStorage createTmpWorldStorage(String tmpWorldName, String format) {
-        return Registries.WORLD_STORAGE_FACTORIES.get(format).apply(tmpWorldPath.resolve(tmpWorldName));
-    }
-
     @Override
     public void tick(long currentTick) {
-        tmpWorldStorage.tick(currentTick);
+        targetStorage.tick(currentTick);
     }
 
     @Override
     public void setWorld(World world) {
-        tmpWorldStorage.setWorld(world);
+        targetStorage.setWorld(world);
     }
 
     @Override
     public void shutdown() {
-        tmpWorldStorage.shutdown();
+        targetStorage.shutdown();
+        if (!persistent && targetPath != null) {
+            deletePath(targetPath);
+        }
+    }
+
+    private static void deletePath(Path path) {
+        try {
+            if (!Files.exists(path)) return;
+            try (var walk = Files.walk(path)) {
+                walk.sorted(Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                Files.delete(p);
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(e);
+                            }
+                        });
+            }
+        } catch (Exception e) {
+            log.error("Failed to clean up tmp world at {}", path, e);
+        }
     }
 
     @Override
     public CompletableFuture<Chunk> readChunk(int chunkX, int chunkZ, DimensionInfo dimensionInfo) {
+        if (persistent && targetStorage.containChunk(chunkX, chunkZ, dimensionInfo)) {
+            return targetStorage.readChunk(chunkX, chunkZ, dimensionInfo);
+        }
         return templateStorage.readChunk(chunkX, chunkZ, dimensionInfo);
     }
 
     @Override
     public Chunk readChunkSync(int chunkX, int chunkZ, DimensionInfo dimensionInfo) {
+        if (persistent && targetStorage.containChunk(chunkX, chunkZ, dimensionInfo)) {
+            return targetStorage.readChunkSync(chunkX, chunkZ, dimensionInfo);
+        }
         return templateStorage.readChunkSync(chunkX, chunkZ, dimensionInfo);
     }
 
     @Override
     public CompletableFuture<Void> writeChunk(Chunk chunk) {
-        return tmpWorldStorage.writeChunk(chunk);
+        return targetStorage.writeChunk(chunk);
     }
 
     @Override
     public void writeChunkSync(Chunk chunk) {
-        tmpWorldStorage.writeChunkSync(chunk);
+        targetStorage.writeChunkSync(chunk);
     }
 
     @Override
     public CompletableFuture<Map<Long, Entity>> readEntities(int chunkX, int chunkZ, DimensionInfo dimensionInfo) {
+        if (persistent && targetStorage.containChunk(chunkX, chunkZ, dimensionInfo)) {
+            return targetStorage.readEntities(chunkX, chunkZ, dimensionInfo);
+        }
         return templateStorage.readEntities(chunkX, chunkZ, dimensionInfo);
     }
 
     @Override
     public Map<Long, Entity> readEntitiesSync(int chunkX, int chunkZ, DimensionInfo dimensionInfo) {
+        if (persistent && targetStorage.containChunk(chunkX, chunkZ, dimensionInfo)) {
+            return targetStorage.readEntitiesSync(chunkX, chunkZ, dimensionInfo);
+        }
         return templateStorage.readEntitiesSync(chunkX, chunkZ, dimensionInfo);
     }
 
     @Override
     public CompletableFuture<Void> writeEntities(int chunkX, int chunkZ, DimensionInfo dimensionInfo, Map<Long, Entity> entities) {
-        return tmpWorldStorage.writeEntities(chunkX, chunkZ, dimensionInfo, entities);
+        return targetStorage.writeEntities(chunkX, chunkZ, dimensionInfo, entities);
     }
 
     @Override
     public void writeEntitiesSync(int chunkX, int chunkZ, DimensionInfo dimensionInfo, Map<Long, Entity> entities) {
-        tmpWorldStorage.writeEntitiesSync(chunkX, chunkZ, dimensionInfo, entities);
+        targetStorage.writeEntitiesSync(chunkX, chunkZ, dimensionInfo, entities);
     }
 
     @Override
@@ -156,7 +184,7 @@ public class TemplateWorldStorage implements WorldStorage {
 
     @Override
     public void writeWorldData(WorldData worldData) {
-        tmpWorldStorage.writeWorldData(worldData);
+        targetStorage.writeWorldData(worldData);
     }
 
     @Override
